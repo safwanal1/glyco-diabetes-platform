@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Glyco — Metabolic Risk Console</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --ink:#0A1116;
+    --panel:#0F1922;
+    --line:rgba(180,200,210,0.12);
+    --paper:#EAF1F3;
+    --paper-dim:#8CA3AC;
+    --glucose:#F0A83D;
+    --glucose-dim:#7A5A1E;
+    --inrange:#4FB0C6;
+    --inrange-dim:#255460;
+    --alert:#E2544A;
+    --alert-dim:#712A24;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--ink);color:var(--paper);
+    font-family:'Sora',sans-serif;height:100%;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  .app{max-width:1380px;margin:0 auto;padding:0 24px 40px;}
+
+  header{display:flex;align-items:center;justify-content:space-between;
+    padding:22px 2px 18px;border-bottom:1px solid var(--line);margin-bottom:24px;}
+  .brand{display:flex;align-items:baseline;gap:12px;}
+  .brand h1{margin:0;font-size:25px;font-weight:700;letter-spacing:-0.01em;}
+  .brand span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--paper-dim);}
+  .disclaimer{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--paper-dim);
+    border:1px solid var(--line);padding:7px 12px;border-radius:20px;max-width:300px;text-align:right;line-height:1.5;}
+
+  /* ---- glucose wave hero ---- */
+  .hero{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    margin-bottom:26px;background:#0C141B;}
+  #wave{display:block;width:100%;height:210px;}
+  .hero-overlay{position:absolute;top:0;right:0;bottom:0;width:280px;
+    display:flex;flex-direction:column;justify-content:center;padding:0 26px;
+    background:linear-gradient(90deg,rgba(12,20,27,0) 0%,rgba(12,20,27,0.94) 32%,rgba(12,20,27,0.98) 100%);}
+  .gluc-now{font-family:'JetBrains Mono',monospace;font-size:38px;font-weight:600;line-height:1;}
+  .gluc-unit{font-size:12px;color:var(--paper-dim);margin-top:4px;}
+  .verdict-chip{margin-top:14px;display:inline-flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .verdict-chip .dot{width:8px;height:8px;border-radius:50%;}
+  .risk-line{margin-top:14px;font-size:12px;color:var(--paper-dim);font-family:'JetBrains Mono',monospace;}
+  .risk-line b{color:var(--paper);}
+  .hero-tag{position:absolute;left:22px;top:16px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--paper-dim);}
+
+  /* ---- layout ---- */
+  .grid{display:grid;grid-template-columns:350px 1fr;gap:24px;}
+  @media (max-width:940px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{border:1px solid var(--line);border-radius:10px;padding:22px;background:var(--panel);}
+  .panel h2{margin:0 0 4px;font-size:15px;font-weight:600;}
+  .panel p.sub{margin:0 0 18px;font-size:12px;color:var(--paper-dim);font-family:'JetBrains Mono',monospace;line-height:1.6;}
+
+  .group-title{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--paper-dim);
+    margin:18px 0 12px;padding-top:16px;border-top:1px solid var(--line);}
+  .group-title:first-of-type{margin-top:0;border-top:none;padding-top:0;}
+
+  .field{margin-bottom:16px;}
+  .field label{display:flex;justify-content:space-between;font-size:12px;color:var(--paper-dim);
+    margin-bottom:6px;font-family:'JetBrains Mono',monospace;}
+  .field label b{color:var(--paper);font-weight:500;}
+  input[type=range]{width:100%;-webkit-appearance:none;height:3px;border-radius:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+    background:var(--glucose);cursor:pointer;box-shadow:0 0 0 4px rgba(240,168,61,0.16);}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;background:var(--glucose);cursor:pointer;}
+
+  .randomize{width:100%;margin:16px 0 4px;padding:11px;border-radius:6px;border:1px solid var(--inrange-dim);
+    background:rgba(79,176,198,0.08);color:var(--inrange);font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;cursor:pointer;}
+  .randomize:hover{background:rgba(79,176,198,0.16);}
+
+  .right-stack{display:flex;flex-direction:column;gap:24px;}
+
+  /* contribution chart */
+  #contrib{width:100%;height:280px;display:block;}
+
+  .cases .case-row{display:flex;justify-content:space-between;padding:9px 0;
+    border-bottom:1px solid var(--line);font-size:12px;font-family:'JetBrains Mono',monospace;}
+  .cases .case-row:last-child{border-bottom:none;}
+  .case-row .flag{width:7px;height:7px;border-radius:50%;margin-right:8px;display:inline-block;}
+  .case-left{color:var(--paper-dim);display:flex;align-items:center;}
+  .case-left b{color:var(--paper);margin-left:2px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><h1>Glyco</h1><span>metabolic risk console</span></div>
+    <div class="disclaimer">Demonstration tool only — not medical advice or a diagnosis. Consult a clinician for real diabetes screening.</div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-tag">CONTINUOUS TRACE — SIMULATED</div>
+    <canvas id="wave"></canvas>
+    <div class="hero-overlay">
+      <div class="gluc-now"><span id="glucNow">—</span></div>
+      <div class="gluc-unit">simulated glucose, mg/dl</div>
+      <div class="verdict-chip"><span class="dot" id="verdictDot"></span><span id="verdictText">Awaiting input</span></div>
+      <div class="risk-line">predicted risk <b id="riskPct">—</b></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Patient factors</h2>
+      <p class="sub">Adjust the values below — the trace and prediction update live.</p>
+
+      <div class="group-title">Profile</div>
+      <div class="field"><label>Age <b id="ageVal">33</b></label>
+        <input type="range" id="age" min="21" max="81" value="33"></div>
+      <div class="field"><label>Pregnancies <b id="pregVal">3</b></label>
+        <input type="range" id="preg" min="0" max="17" value="3"></div>
+
+      <div class="group-title">Metabolic panel</div>
+      <div class="field"><label>Plasma glucose <b id="glucVal">120 mg/dl</b></label>
+        <input type="range" id="gluc" min="0" max="199" value="120"></div>
+      <div class="field"><label>Serum insulin <b id="insVal">80 μU/ml</b></label>
+        <input type="range" id="ins" min="0" max="500" value="80"></div>
+      <div class="field"><label>Body mass index <b id="bmiVal">32.0</b></label>
+        <input type="range" id="bmi" min="0" max="67" value="32"></div>
+
+      <div class="group-title">Vitals</div>
+      <div class="field"><label>Blood pressure <b id="bpVal">69 mmHg</b></label>
+        <input type="range" id="bp" min="0" max="122" value="69"></div>
+      <div class="field"><label>Skin fold thickness <b id="skinVal">20 mm</b></label>
+        <input type="range" id="skin" min="0" max="99" value="20"></div>
+
+      <div class="group-title">Genetic factor</div>
+      <div class="field"><label>Diabetes pedigree function <b id="dpfVal">0.47</b></label>
+        <input type="range" id="dpf" min="8" max="242" value="47"></div>
+
+      <button class="randomize" id="randomize">⟳ Load a random profile</button>
+    </div>
+
+    <div class="right-stack">
+      <div class="panel">
+        <h2>What's driving the prediction</h2>
+        <p class="sub">Each factor's pull toward diabetic (right, amber) or non-diabetic (left, blue), relative to a typical profile.</p>
+        <canvas id="contrib" width="900" height="360"></canvas>
+      </div>
+
+      <div class="panel cases">
+        <h2>Recent profiles scored</h2>
+        <p class="sub">A rolling log of profiles evaluated in this console.</p>
+        <div id="caseLog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- synthetic scorer -----------
+   No trained model or dataset is present in this environment (the
+   notebook loads '/content/diabetes.csv'), so this is a hand-set
+   logistic function over the same 8 PIMA fields, tuned to move
+   plausibly with the sliders — it approximates, not reproduces,
+   the notebook's SVM classifier. */
+const $ = id => document.getElementById(id);
+let state = { preg:3, gluc:120, bp:69, skin:20, ins:80, bmi:32, dpf:0.47, age:33 };
+
+function sigmoid(x){ return 1/(1+Math.exp(-x)); }
+function contributions(s){
+  return {
+    'Glucose': ((s.gluc-120)/40)*1.30,
+    'BMI': ((s.bmi-32)/8)*0.65,
+    'Age': ((s.age-33)/15)*0.50,
+    'Pedigree': ((s.dpf-0.47)/0.40)*0.55,
+    'Pregnancies': ((s.preg-4)/4)*0.25,
+    'Blood pressure': ((s.bp-69)/20)*0.20,
+    'Insulin': ((s.ins-80)/100)*0.20,
+    'Skin fold': ((s.skin-20)/15)*0.15
+  };
+}
+function score(s){
+  const c = contributions(s);
+  const sum = Object.values(c).reduce((a,b)=>a+b,0);
+  return sigmoid(-1.6 + sum);
+}
+
+// ---------- controls ----------
+function bind(id,key,labelId,fmt,scale){
+  $(id).addEventListener('input', e=>{
+    const raw = parseFloat(e.target.value);
+    state[key] = scale ? raw/scale : raw;
+    $(labelId).textContent = fmt(state[key]);
+    update();
+  });
+}
+bind('age','age','ageVal', v=>v, null);
+bind('preg','preg','pregVal', v=>v, null);
+bind('gluc','gluc','glucVal', v=>v+' mg/dl', null);
+bind('ins','ins','insVal', v=>v+' μU/ml', null);
+bind('bmi','bmi','bmiVal', v=>v.toFixed(1), null);
+bind('bp','bp','bpVal', v=>v+' mmHg', null);
+bind('skin','skin','skinVal', v=>v+' mm', null);
+bind('dpf','dpf','dpfVal', v=>v.toFixed(2), 100);
+
+$('randomize').addEventListener('click', ()=>{
+  const r=(a,b)=>a+Math.random()*(b-a);
+  state = {
+    age:Math.round(r(21,81)), preg:Math.round(r(0,17)), gluc:Math.round(r(60,199)),
+    bp:Math.round(r(40,122)), skin:Math.round(r(0,60)), ins:Math.round(r(0,400)),
+    bmi:+r(18,50).toFixed(1), dpf:+r(0.08,1.6).toFixed(2)
+  };
+  $('age').value=state.age; $('ageVal').textContent=state.age;
+  $('preg').value=state.preg; $('pregVal').textContent=state.preg;
+  $('gluc').value=state.gluc; $('glucVal').textContent=state.gluc+' mg/dl';
+  $('bp').value=state.bp; $('bpVal').textContent=state.bp+' mmHg';
+  $('skin').value=state.skin; $('skinVal').textContent=state.skin+' mm';
+  $('ins').value=state.ins; $('insVal').textContent=state.ins+' μU/ml';
+  $('bmi').value=state.bmi; $('bmiVal').textContent=state.bmi.toFixed(1);
+  $('dpf').value=Math.round(state.dpf*100); $('dpfVal').textContent=state.dpf.toFixed(2);
+  update(true);
+});
+
+// ---------- contribution bar chart ----------
+const contribCanvas = $('contrib');
+const cctx = contribCanvas.getContext('2d');
+function drawContrib(c){
+  const W=contribCanvas.width, H=contribCanvas.height;
+  cctx.clearRect(0,0,W,H);
+  const entries = Object.entries(c);
+  const maxAbs = Math.max(0.4, ...entries.map(([,v])=>Math.abs(v)));
+  const midX = W/2;
+  const rowH = H/entries.length;
+  const barMax = (W/2 - 140);
+  cctx.strokeStyle='rgba(255,255,255,0.1)';
+  cctx.beginPath(); cctx.moveTo(midX,10); cctx.lineTo(midX,H-10); cctx.stroke();
+
+  cctx.font='13px JetBrains Mono, monospace';
+  cctx.textBaseline='middle';
+  entries.forEach(([label,v],i)=>{
+    const y = rowH*i + rowH/2;
+    const w = Math.abs(v)/maxAbs * barMax;
+    const positive = v>=0;
+    cctx.fillStyle = positive ? 'rgba(240,168,61,0.85)' : 'rgba(79,176,198,0.85)';
+    cctx.fillRect(positive?midX:midX-w, y-9, w, 18);
+    cctx.fillStyle='rgba(234,241,243,0.85)';
+    cctx.textAlign='left';
+    cctx.fillText(label, 12, y);
+  });
+}
+
+// ---------- case log ----------
+const caseLog = $('caseLog');
+let caseCount=0;
+function logCase(p){
+  caseCount++;
+  const row = document.createElement('div');
+  row.className='case-row';
+  const flagged = p>0.5;
+  row.innerHTML = `<span class="case-left"><span class="flag" style="background:${flagged?'var(--alert)':'var(--inrange)'}"></span>Profile <b>#${2000+caseCount}</b></span><span>${(p*100).toFixed(0)}% risk</span>`;
+  caseLog.insertBefore(row, caseLog.firstChild);
+  while(caseLog.children.length>8) caseLog.removeChild(caseLog.lastChild);
+}
+
+// ---------- glucose wave background ----------
+const wave = $('wave');
+const wctx = wave.getContext('2d');
+function resizeWave(){
+  wave.width = wave.clientWidth*devicePixelRatio;
+  wave.height = wave.clientHeight*devicePixelRatio;
+}
+resizeWave();
+window.addEventListener('resize', resizeWave);
+
+let targetRisk=0, smoothRisk=0, t=0;
+let history = [];
+function pushSample(){
+  const base = 90 + smoothRisk*90;
+  const noise = (Math.random()-0.5)*10*(1+smoothRisk);
+  const spike = smoothRisk>0.6 && Math.random()<0.04 ? rndSpike() : 0;
+  const val = base + noise + spike;
+  history.push(val);
+  if(history.length>240) history.shift();
+}
+function rndSpike(){ return 40+Math.random()*40; }
+for(let i=0;i<240;i++) pushSample();
+
+function waveLoop(){
+  t+=1;
+  smoothRisk += (targetRisk - smoothRisk)*0.03;
+  if(t%3===0) pushSample();
+
+  const W=wave.width, H=wave.height;
+  wctx.clearRect(0,0,W,H);
+  wctx.fillStyle='#0C141B';
+  wctx.fillRect(0,0,W,H);
+
+  const minV=40, maxV=260;
+  const toY = v => H - ((v-minV)/(maxV-minV))*H;
+
+  // target range band (70-140)
+  wctx.fillStyle='rgba(79,176,198,0.07)';
+  wctx.fillRect(0, toY(140), W, toY(70)-toY(140));
+
+  // gridlines
+  wctx.strokeStyle='rgba(255,255,255,0.04)';
+  for(let gy=0; gy<H; gy+=H/6){ wctx.beginPath(); wctx.moveTo(0,gy); wctx.lineTo(W,gy); wctx.stroke(); }
+
+  // trace
+  wctx.beginPath();
+  history.forEach((v,i)=>{
+    const x = i/(history.length-1)*W;
+    const y = toY(v);
+    i===0 ? wctx.moveTo(x,y) : wctx.lineTo(x,y);
+  });
+  const calm=[79,176,198], hot=[226,84,74];
+  const mix = calm.map((c,i)=>Math.round(c+(hot[i]-c)*smoothRisk));
+  wctx.strokeStyle = `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+  wctx.lineWidth = 2.2*devicePixelRatio;
+  wctx.lineJoin='round';
+  wctx.shadowColor = wctx.strokeStyle;
+  wctx.shadowBlur = 6*devicePixelRatio;
+  wctx.stroke();
+  wctx.shadowBlur=0;
+
+  const last = history[history.length-1];
+  $('glucNow').textContent = Math.round(last);
+
+  requestAnimationFrame(waveLoop);
+}
+waveLoop();
+
+// ---------- render ----------
+function update(count){
+  const c = contributions(state);
+  const p = score(state);
+  targetRisk = p;
+  drawContrib(c);
+
+  const dot=$('verdictDot'), text=$('verdictText');
+  $('riskPct').textContent = (p*100).toFixed(1)+'%';
+  if(p<0.4){
+    text.textContent='Pattern consistent with non-diabetic';
+    dot.style.background='var(--inrange)';
+  } else if(p<0.65){
+    text.textContent='Some risk factors elevated';
+    dot.style.background='var(--glucose)';
+  } else {
+    text.textContent='Flagged: diabetic risk pattern';
+    dot.style.background='var(--alert)';
+  }
+  if(count) logCase(p);
+}
+
+update(false);
+for(let i=0;i<5;i++){
+  logCase(Math.random()<0.35 ? (0.5+Math.random()*0.4) : Math.random()*0.5);
+}
+</script>
+</body>
+</html>
